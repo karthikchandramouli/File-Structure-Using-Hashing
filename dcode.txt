@@ -1,0 +1,481 @@
+import tkinter as tk
+import re
+import json
+from tkinter import scrolledtext
+from tkinter import *
+
+# Hash table constants
+BUCKET_SIZE = 3
+BUCKET_CAPACITY = 3  # Maximum capacity for each bucket
+window = tk.Tk()
+window.title("Online shopping")
+# File paths
+HASH_TABLE_FILE = "hash_table.txt"
+DATA_FILE = "data.txt"
+
+# Create the hash table
+hash_table = [[] for _ in range(BUCKET_SIZE)]
+
+# Load hash table and data from files if they exist
+try:
+    with open(HASH_TABLE_FILE, "r") as file:
+        hash_table = json.load(file)
+except FileNotFoundError:
+    pass
+
+try:
+    with open(DATA_FILE, "r") as file:
+        data = json.load(file)
+except FileNotFoundError:
+    data = {}
+except json.JSONDecodeError:
+    data = {}
+
+
+# Hash table operations
+def hash_function(key):
+    return hash(key) % BUCKET_SIZE
+
+
+def insert_item(key, price, quantity):
+    index = hash_function(key)
+
+    if len(hash_table[index]) >= BUCKET_CAPACITY:
+        message_label.config(text=f"Overflow: Bucket {index} is already full. Cannot insert key {key}")
+        return False
+
+    for item in hash_table[index]:
+        if item["name"] == key:
+            message_label.config(text=f"Key {key} already exists in the hash table.")
+            return False
+
+    item = {"name": key, "price": price, "quantity": quantity}
+    hash_table[index].append(item)
+    data[key] = {"price": price, "quantity": quantity}
+    message_label.config(text=f"Key {key} inserted into the hash table.")
+
+    # Save hash table and data to files
+    save_hash_table()
+    save_data()
+
+    return True
+
+
+def delete_item(key):
+    index = hash_function(key)
+
+    for item in hash_table[index]:
+        if item["name"] == key:
+            hash_table[index].remove(item)
+            del data[key]
+            message_label.config(text=f"Key {key} deleted from the hash table.")
+
+            # Mark the deleted item in the hashtable.txt file
+            with open("hashtable.txt", "r+") as file:
+                lines = file.readlines()
+                file.seek(0)
+                for line in lines:
+                    if f"Name: {key}\tPrice: {item['price']}\tQuantity: {item['quantity']}" in line:
+                        line = line.replace(line.strip(), "#" + line.strip())
+                    file.write(line)
+                file.truncate()
+
+            # Save hash table and data to files
+            save_hash_table()
+            save_data()
+
+            return True
+
+    message_label.config(text=f"Key {key} not found in the hash table.")
+    return False
+
+
+
+
+def search_item(key):
+    index = hash_function(key)
+
+    for item in hash_table[index]:
+        if item["name"] == key:
+            message_label.config(text=f"Key {key} found in the hash table.")
+            return item
+
+    message_label.config(text=f"Key {key} not found in the hash table.")
+    return None
+
+
+def modify_item(old_key, new_key, new_price, new_quantity):
+    index = hash_function(old_key)
+
+    for item in hash_table[index]:
+        if item["name"] == old_key:
+            item["name"] = new_key
+            item["price"] = new_price
+            item["quantity"] = new_quantity
+            del data[old_key]
+            data[new_key] = {"price": new_price, "quantity": new_quantity}
+            message_label.config(text=f"Key {old_key} modified to {new_key} in the hash table.")
+
+            # Save hash table and data to files
+            save_hash_table()
+            save_data()
+
+            return True
+
+    message_label.config(text="Old key not found in the hash table.")
+    return False
+
+
+
+def save_hash_table():
+    with open(HASH_TABLE_FILE, "w") as file:
+        for index, bucket in enumerate(hash_table):
+            if not bucket:
+                file.write(f"Bucket {index}|/|\n")
+            else:
+                for item in bucket:
+                    if item['name'] not in data:
+                        file.write(f"Bucket {index}|#|\n")
+                    else:
+                        file.write(f"Bucket {index}|{hash_function(item['name'])}|{item['name']}\n")
+
+
+
+def save_data():
+    with open(DATA_FILE, "w") as file:
+        json.dump(data, file)
+
+
+def load_hash_table():
+    global hash_table
+    hash_table = [[] for _ in range(BUCKET_SIZE)]
+    try:
+        with open(HASH_TABLE_FILE, "r") as file:
+            lines = file.readlines()
+            for line in lines:
+                parts = line.split("|")
+                index = int(re.search(r'\d+', parts[0]).group())
+                if parts[1] == "/":
+                    continue
+                elif parts[1] == "#":
+                    continue
+                else:
+                    key = parts[2].strip()
+                    item = {"name": key}
+                    hash_table[index].append(item)
+    except FileNotFoundError:
+        pass
+
+
+def load_data():
+    global data
+    try:
+        with open(DATA_FILE, "r") as file:
+            data = json.load(file)
+    except FileNotFoundError:
+        data = {}
+    except json.JSONDecodeError:
+        data = {}
+
+
+
+
+# GUI functions
+def validate_item_name(name):
+    if re.match("^[a-zA-Z]+$", name):
+        return True
+    return False
+
+
+def validate_number(input):
+    if re.match("^[0-9]*$", input):
+        return True
+    return False
+
+
+def display_hash_table():
+    global hashtable_frame  # Declare hashtable_frame as a global variable
+
+    hashtable_frame.destroy()
+
+    hashtable_frame = tk.Frame(window, padx=10, pady=10, bd=1, relief="solid")
+    hashtable_frame.pack(pady=20)
+
+    header_row = tk.Frame(hashtable_frame, bg="gray")
+    header_row.pack(fill="x", pady=5)
+
+    header_bucket_label = tk.Label(header_row, text="Bucket", width=10, bg="gray", fg="white")
+    header_bucket_label.pack(side="left")
+
+    header_index_label = tk.Label(header_row, text="Index", width=10, bg="gray", fg="white")
+    header_index_label.pack(side="left")
+
+    header_name_label = tk.Label(header_row, text="Name", width=20, bg="gray", fg="white")
+    header_name_label.pack(side="left")
+
+    for index, bucket in enumerate(hash_table):
+        for item in bucket:
+            item_row = tk.Frame(hashtable_frame)
+            item_row.pack(fill="x", pady=2)
+
+            bucket_label = tk.Label(item_row, text=f"Bucket {index}", width=10)
+            bucket_label.pack(side="left")
+
+            index_label = tk.Label(item_row, text=f"{hash_function(item['name'])}", width=10)
+            index_label.pack(side="left")
+
+            item_name_label = tk.Label(item_row, text=item["name"], width=20)
+            item_name_label.pack(side="left")
+
+
+def display_items():
+    global items_list_frame  # Declare items_list_frame as a global variable
+
+    items_list_frame.destroy()
+
+    items_list_frame = tk.Frame(window, padx=10, pady=10, bd=1, relief="solid")
+    items_list_frame.pack(pady=20)
+
+    header_row = tk.Frame(items_list_frame, bg="gray")
+    header_row.pack(fill="x", pady=5)
+
+    header_name_label = tk.Label(header_row, text="Name", width=20, bg="gray", fg="white")
+    header_name_label.pack(side="left")
+
+    header_price_label = tk.Label(header_row, text="Price", width=10, bg="gray", fg="white")
+    header_price_label.pack(side="left")
+
+    header_quantity_label = tk.Label(header_row, text="Quantity", width=10, bg="gray", fg="white")
+    header_quantity_label.pack(side="left")
+
+    for bucket in hash_table:
+        for item in bucket:
+            item_row = tk.Frame(items_list_frame)
+            item_row.pack(fill="x", pady=2)
+
+            item_name_label = tk.Label(item_row, text=item["name"], width=20)
+            item_name_label.pack(side="left")
+
+            item_price_label = tk.Label(item_row, text=item["price"], width=10)
+            item_price_label.pack(side="left")
+
+            item_quantity_label = tk.Label(item_row, text=item["quantity"], width=10)
+            item_quantity_label.pack(side="left")
+
+
+def save_hash_table():
+    with open("hashtable.txt", "w") as file:
+        for index, bucket in enumerate(hash_table):
+            for item in bucket:
+                file.write(f"Bucket {index}|{hash_function(item['name'])}|{item['name']}\n")
+
+
+def save_data():
+    with open("data.txt", "w") as file:
+        for bucket in hash_table:
+            for item in bucket:
+                file.write(f"{item['name']}|{item['price']}|{item['quantity']}\n")
+
+
+
+
+
+def open_add_window():
+    def add_item():
+        name = name_entry.get()
+        price = price_entry.get()
+        quantity = quantity_entry.get()
+
+        if not validate_item_name(name):
+            message_label.config(text="Invalid item name. Item name should only contain alphabets.")
+            return
+
+        if not validate_number(price):
+            message_label.config(text="Invalid price. Price should be a numeric value.")
+            return
+
+        if not validate_number(quantity):
+            message_label.config(text="Invalid quantity. Quantity should be a numeric value.")
+            return
+
+        if insert_item(name, price, quantity):
+            add_window.destroy()
+            display_items()
+            display_hash_table()
+
+    add_window = tk.Toplevel(window)
+    add_window.title("Add Item")
+    add_window.configure(bg="lightgray")
+
+    name_label = tk.Label(add_window, text="Name:", bg="lightgray", font=("Arial", 14))
+    name_label.pack()
+
+    name_entry = tk.Entry(add_window, font=("Arial", 14))
+    name_entry.pack()
+
+    price_label = tk.Label(add_window, text="Price:", bg="lightgray", font=("Arial", 14))
+    price_label.pack()
+
+    price_entry = tk.Entry(add_window, font=("Arial", 14))
+    price_entry.pack()
+
+    quantity_label = tk.Label(add_window, text="Quantity:", bg="lightgray", font=("Arial", 14))
+    quantity_label.pack()
+
+    quantity_entry = tk.Entry(add_window, font=("Arial", 14))
+    quantity_entry.pack()
+
+    add_button = tk.Button(add_window, text="Add", command=add_item, bg="lightblue", fg="white", font=("Arial", 14))
+    add_button.pack()
+
+
+def open_delete_window():
+    def delete_item_gui():
+        name = name_entry.get()
+
+        if delete_item(name):
+            delete_window.destroy()
+            display_items()
+            display_hash_table()
+
+    delete_window = tk.Toplevel(window)
+    delete_window.title("Delete Item")
+    delete_window.configure(bg="lightgray")
+
+    name_label = tk.Label(delete_window, text="Name:", bg="lightgray", font=("Arial", 14))
+    name_label.pack()
+
+    name_entry = tk.Entry(delete_window, font=("Arial", 14))
+    name_entry.pack()
+
+    delete_button = tk.Button(delete_window, text="Delete", command=delete_item_gui, bg="lightcoral", fg="white",
+                              font=("Arial", 14))
+    delete_button.pack()
+
+
+def open_modify_window():
+    def modify_item_gui():
+        old_name = old_name_entry.get()
+        new_name = new_name_entry.get()
+        new_price = new_price_entry.get()
+        new_quantity = new_quantity_entry.get()
+
+        if not validate_item_name(new_name):
+            message_label.config(text="Invalid item name. Item name should only contain alphabets.")
+            return
+
+        if not validate_number(new_price):
+            message_label.config(text="Invalid price. Price should be a numeric value.")
+            return
+
+        if not validate_number(new_quantity):
+            message_label.config(text="Invalid quantity. Quantity should be a numeric value.")
+            return
+
+        if modify_item(old_name, new_name, new_price, new_quantity):
+            modify_window.destroy()
+            display_items()
+            display_hash_table()
+
+    modify_window = tk.Toplevel(window)
+    modify_window.title("Modify Item")
+    modify_window.configure(bg="lightgray")
+
+    old_name_label = tk.Label(modify_window, text="Old Name:", bg="lightgray", font=("Arial", 14))
+    old_name_label.pack()
+
+    old_name_entry = tk.Entry(modify_window, font=("Arial", 14))
+    old_name_entry.pack()
+
+    new_name_label = tk.Label(modify_window, text="New Name:", bg="lightgray", font=("Arial", 14))
+    new_name_label.pack()
+
+    new_name_entry = tk.Entry(modify_window, font=("Arial", 14))
+    new_name_entry.pack()
+
+    new_price_label = tk.Label(modify_window, text="New Price:", bg="lightgray", font=("Arial", 14))
+    new_price_label.pack()
+
+    new_price_entry = tk.Entry(modify_window, font=("Arial", 14))
+    new_price_entry.pack()
+
+    new_quantity_label = tk.Label(modify_window, text="New Quantity:", bg="lightgray", font=("Arial", 14))
+    new_quantity_label.pack()
+
+    new_quantity_entry = tk.Entry(modify_window, font=("Arial", 14))
+    new_quantity_entry.pack()
+
+    modify_button = tk.Button(modify_window, text="Modify", command=modify_item_gui, bg="lightgreen", fg="white",
+                              font=("Arial", 14))
+    modify_button.pack()
+
+
+def open_search_window():
+    def search():
+        name = name_entry.get()
+
+        item = search_item(name)
+
+        if item:
+            message_label.config(text=f"Name: {item['name']}\nPrice: {item['price']}\nQuantity: {item['quantity']}")
+        else:
+            message_label.config(text=f"Item '{name}' not found in the hash table.")
+
+        search_window.destroy()
+
+    search_window = tk.Toplevel(window)
+    search_window.title("Search Item")
+    search_window.configure(bg="lightgray")
+
+    name_label = tk.Label(search_window, text="Name:", bg="lightgray", font=("Arial", 14))
+    name_label.pack()
+
+    name_entry = tk.Entry(search_window, font=("Arial", 14))
+    name_entry.pack()
+
+    search_button = tk.Button(search_window, text="Search", command=search, bg="lightyellow", fg="black",
+                              font=("Arial", 14))
+    search_button.pack()
+
+
+# Main GUI window
+
+
+
+# Create a frame to hold the controls
+controls_frame = tk.Frame(window)
+controls_frame.pack(pady=20)
+
+
+# Create buttons for different operations
+add_button = tk.Button(controls_frame, text="Add Item", command=open_add_window, font=("Arial", 14))
+add_button.pack(side="left", padx=10)
+
+delete_button = tk.Button(controls_frame, text="Delete Item", command=open_delete_window, font=("Arial", 14))
+delete_button.pack(side="left", padx=10)
+
+modify_button = tk.Button(controls_frame, text="Modify Item", command=open_modify_window, font=("Arial", 14))
+modify_button.pack(side="left", padx=10)
+
+search_button = tk.Button(controls_frame, text="Search Item", command=open_search_window, font=("Arial", 14))
+search_button.pack(side="left", padx=10)
+
+# Create a frame to display the hash table
+hashtable_frame = tk.Frame(window)
+hashtable_frame.pack(pady=20)
+
+# Create a frame to display the list of items
+items_list_frame = tk.Frame(window)
+items_list_frame.pack(pady=20)
+
+# Create a label to display messages
+message_label = tk.Label(window, text="", font=("Arial", 14))
+message_label.pack()
+
+# Display the initial hash table and items list
+display_hash_table()
+display_items()
+
+
+# Run the GUI
+window.mainloop()
